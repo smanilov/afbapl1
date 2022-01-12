@@ -1,0 +1,15 @@
+#content {
+  max-width: 700px;
+  margin: auto;
+}
+
+#runButton {
+  width: 664px;
+  font-size: xx-large;
+}
+
+#sourceCode {
+  font-family: monospace;
+  margin-top: 16px;
+  resize: vertical;
+}
