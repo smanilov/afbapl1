@@ -13,24 +13,29 @@ export class Afbpl1Interpreter {
     this.rawSource = rawSource;
   }
 
-  // Analyses and executes the raw source.
-  interpret() {
+  init() {
     const startLineOrError = this.findStartLine();
     if (startLineOrError.isError) {
       return startLineOrError;
     }
-    this.startLine = startLineOrError.value;
+    this.currentLine = startLineOrError.value;
 
-    const unitOffsetOrError = this.computeUnitOffset(this.startLine);
+    const unitOffsetOrError = this.computeUnitOffset(this.currentLine);
     if (unitOffsetOrError.isError) {
       return unitOffsetOrError;
     }
+  }
 
-    for (let i = this.startLine + 1; ; i++) {
-      if (i == this.instructions.length) {
-        i = 0;
+  // Continue the interpretation of the program from the last interpreted
+  // statement.
+  //
+  // At the beginning, this would be the 'начало' statement.
+  continue() {
+    for (this.currentLine++; ; this.currentLine++) {
+      if (this.currentLine == this.instructions.length) {
+        this.currentLine = 0;
       }
-      const inst = this.instructions[i];
+      const inst = this.instructions[this.currentLine];
       if (this.isEnd(inst)) {
         break;
       }

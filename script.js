@@ -3,9 +3,21 @@ import { Afbpl1Interpreter } from './interpreter.js';
 import { getSource } from './source_area.js';
 
 function runProgram() {
-  const result = new Afbpl1Interpreter(getSource()).interpret();
-  if (result && result.isError) {
-    console.log("Грешка: " + result.message);
+  let interpreter = new Afbpl1Interpreter(getSource());
+
+  {
+    const result = interpreter.init();
+    if (result && result.isError) {
+      console.log("Грешка: " + result.message);
+      return;
+    }
+  }
+
+  {
+    const result = interpreter.continue();
+    if (result && result.isError) {
+      console.log("Грешка: " + result.message);
+    }
   }
 }
 
