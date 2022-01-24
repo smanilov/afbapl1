@@ -104,13 +104,45 @@ export class Afbpl1Interpreter {
     }
 
     const stringEnds = Array.from(instruction.matchAll("\""));
-    if (stringEnds.length != 2) {
-      return {
-        isError: true,
-        message: "Инструкцията за изход трябва да е последвана от текст в двойни кавички (\")."
-      };
+    const argumentIsStringLiteral = stringEnds.length == 2;
+    console.log(stringEnds.length);
+    console.log(argumentIsStringLiteral);
+
+    const trimmed_inst = instruction.trim();
+    const kwLength = "изход".length;
+    const isKeywordFollowedBySpace = trimmed_inst[kwLength] === ' ';
+
+    const argument = trimmed_inst.substring(kwLength + 1);
+    const argumentContainsSpaces = argument.indexOf(' ') !== -1;
+
+    var valueToOutput;
+    if (argumentIsStringLiteral) {
+      valueToOutput = instruction.substring(stringEnds[0].index + 1, stringEnds[1].index);
+    } else {
+      if (!isKeywordFollowedBySpace) {
+        return {
+          isError: true,
+          message: "Инструкцията за изход трябва да е последвана от празно " +
+            "място, ако аргументът не е текст в кавички."
+        };
+      }
+      if (argumentContainsSpaces) {
+        return {
+          isError: true,
+          message: "Инструкцията за изход трябва да е последвана от празно " +
+            "място, ако аргументът не е текст в кавички."
+        };
+      }
+      if (!argument in this.symbolTable) {
+        return {
+          isError: true,
+          message: "Инструкцията за изход трябва да е последвана от име на известна вече променлива, или текст в " +
+            "двойни кавички (\")."
+        };
+      }
+      valueToOutput = this.symbolTable[argument];
     }
-    const valueToOutput = instruction.substring(stringEnds[0].index + 1, stringEnds[1].index);
+
     writeLine(valueToOutput);
   }
 

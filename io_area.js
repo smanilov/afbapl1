@@ -54,13 +54,16 @@ export function configureIOEditBehavior() {
   element.addEventListener("beforeinput", function (event) {
     if (onread == null) {
       event.preventDefault();
-      return;
     }
+  });
+
+  element.addEventListener("input", function (event) {
     if (event.inputType === "insertLineBreak") {
       console.log('finish input; fixedIOTextLength=' + fixedIOTextLength);
       const callback = onread;
       onread = null;
-      callback(getIOText(element).substring(fixedIOTextLength));
+      const text = getIOText(element);
+      callback(text.substring(fixedIOTextLength, text.length - 1));
     }
   });
 }
