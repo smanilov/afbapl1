@@ -59,7 +59,6 @@ export function configureIOEditBehavior() {
 
   element.addEventListener("input", function (event) {
     if (event.inputType === "insertLineBreak") {
-      console.log('finish input; fixedIOTextLength=' + fixedIOTextLength);
       const callback = onread;
       onread = null;
       const text = getIOText(element);

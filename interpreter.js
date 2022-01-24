@@ -32,6 +32,8 @@ class Afbpl1Interpreter {
   }
 
   init() {
+    this.instructions = this.rawSource.split('\n');
+
     const startLineOrError = this.findStartLine();
     if (startLineOrError.isError) {
       return startLineOrError;
@@ -103,8 +105,6 @@ class Afbpl1Interpreter {
 
     const stringEnds = Array.from(instruction.matchAll("\""));
     const argumentIsStringLiteral = stringEnds.length == 2;
-    console.log(stringEnds.length);
-    console.log(argumentIsStringLiteral);
 
     const trimmed_inst = instruction.trim();
     const kwLength = "изход".length;
@@ -131,14 +131,14 @@ class Afbpl1Interpreter {
             "място, ако аргументът не е текст в кавички."
         };
       }
-      if (!argument in this.symbolTable) {
+      if (!this.hasVariable(argument)) {
         return {
           isError: true,
           message: "Инструкцията за изход трябва да е последвана от име на известна вече променлива, или текст в " +
             "двойни кавички (\")."
         };
       }
-      valueToOutput = this.symbolTable[argument];
+      valueToOutput = this.getVariable(argument);
     }
 
     writeLine(valueToOutput);
@@ -153,46 +153,32 @@ class Afbpl1Interpreter {
     });
   }
 
+  // Whether a variable of the given name has been given value already.
+  hasVariable(variableName) {
+    return variableName in this.symbolTable;
+  }
+
+  // Returns the value of a variable, assuming it exists in the symbol table.
+  getVariable(variableName) {
+    return this.symbolTable[variableName];
+  }
+
+  // Sets the value of a variable in the symbol table.
   setVariable(variableName, newValue) {
-    console.log(variableName + ' = ' + newValue);
     this.symbolTable[variableName] = newValue;
   }
 
-  // Get the instructions of the program.
-  getInstructions() {
-    if (!this.instructions) {
-      this.instructions = this.rawSource.split('\n');
-    }
-    return this.instructions;
-  }
-
-  // Get the instructions of the program, but numbered.
-  // The result is an array of objects like { line: 5, value: "начало" }
-  getNumberedInstructions() {
-    if (!this.numberedInstructions) {
-      const instructions = this.getInstructions();
-      this.numberedInstructions = new Array(instructions.length);
-      for (let i = 0; i < instructions.length; i++) {
-        this.numberedInstructions[i] = { line: i, value: instructions[i] };
-      }
-    }
-    return this.numberedInstructions;
-  }
-
-  getTrimmedInstructions() {
-    if (!this.trimmedInstructions) {
-      this.trimmedInstructions = this.getNumberedInstructions().map(
-        inst => ({ line: inst.line, value: inst.value.trim() })
-      );
-    }
-    return this.trimmedInstructions;
-  }
-
   // Returns the line at which the only "начало" in the program can be found.
+  //
   // If there are not exactly one "начало", an error is returned.
   findStartLine() {
-    const starts = this.getTrimmedInstructions().filter(
-      inst => this.isStart(inst.value)
+    var numberedInstructions = new Array(this.instructions.length);
+    for (let i = 0; i < this.instructions.length; i++) {
+      numberedInstructions[i] = { line: i, value: this.instructions[i] };
+    }
+
+    const starts = numberedInstructions.filter(
+      inst => this.isStart(inst.value.trim())
     );
 
     if (starts.length === 1) {
@@ -203,8 +189,8 @@ class Afbpl1Interpreter {
     } else {
       return {
         isError: true,
-        message: "Програмата трябва да има точно едно начало. " +
-          "В момента, има " + starts.length + "."
+        message: "Програмата трябва да има точно едно начало. В момента, има " +
+          starts.length + "."
       };
     }
   }
