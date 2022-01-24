@@ -10,11 +10,25 @@ function setIOText(element, newText/*: string*/) {
   element.value = newText;
 }
 
-export function writeLine(newText/*: string*/) {
+export function write(newText/*: string*/) {
   let element = getElement();
   let text = getIOText(element);
-  text += newText + '\n';
+  text += newText;
   setIOText(element, text);
+}
+
+export function writeLine(newText/*: string*/) {
+  write(newText);
+  write('\n');
+}
+
+var onread = null;
+var fixedIOTextLength = null;
+
+export function readLine(callback) {
+  onread = callback;
+  write('> ');
+  fixedIOTextLength = getIOText(getElement()).length;
 }
 
 function isTextSelected(element) {
@@ -33,8 +47,15 @@ function isCursorAtEnd(element) {
 export function configureIOEditBehavior() {
   let element = getElement();
   element.addEventListener("beforeinput", function (event) {
-    if (!isCursorAtEnd(element)) {
+    if (onread == null) {
       event.preventDefault();
+      return;
+    }
+    if (event.inputType === "insertLineBreak") {
+      console.log('finish input; fixedIOTextLength=' + fixedIOTextLength);
+      const callback = onread;
+      onread = null;
+      callback(getIOText(element).substring(fixedIOTextLength));
     }
   });
 }

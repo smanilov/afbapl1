@@ -1,4 +1,21 @@
-import { writeLine } from './io_area.js';
+import { writeLine, readLine } from './io_area.js';
+
+export const hasCompletedSuccessfully = {
+  isError: false,
+  message: "Изпълнението на програмата приключи успешно."
+};
+
+export const reachedStartAgainError = {
+  isError: true,
+  message: "Изпълнението на програмата стигна повторно до 'начало', " +
+    "без преди това да срещне 'край'."
+};
+
+export const waitingForInput = {
+  isError: false,
+  message: "Изпълнението на програмата е временно спряно, докато " +
+    "потребителя въведе нужния вход."
+}
 
 export class Afbpl1Interpreter {
   /*
@@ -11,6 +28,7 @@ export class Afbpl1Interpreter {
 
   constructor(rawSource/*: string*/) {
     this.rawSource = rawSource;
+    this.symbolTable = {};
   }
 
   init() {
@@ -37,27 +55,26 @@ export class Afbpl1Interpreter {
       }
       const inst = this.instructions[this.currentLine];
       if (this.isEnd(inst)) {
-        const hasCompletedSuccessfully = {
-          isError: false,
-          message: "Изпълнението на програмата приключи успешно."
-        };
         return hasCompletedSuccessfully;
       }
       if (this.isStart(inst)) {
-        const error = {
-          isError: true,
-          message: "Изпълнението на програмата стигна повторно до 'начало', " +
-            "без преди това да срещне 'край'."
-        };
-        return error;
+        return reachedStartAgainError;
       }
       if (this.isOutput(inst)) {
         const maybeError = this.performOutput(inst);
-        if (maybeError.isError) {
+        if (maybeError && maybeError.isError) {
           const error = maybeError;
           return error;
         }
         continue;
+      }
+      if (this.isInput(inst)) {
+        const maybeError = this.prepareForInput(inst);
+        if (maybeError && maybeError.isError) {
+          const error = maybeError;
+          return error;
+        }
+        return waitingForInput;
       }
     }
   }
@@ -72,6 +89,10 @@ export class Afbpl1Interpreter {
 
   isOutput(instruction) {
     return instruction.trim().startsWith("изход");
+  }
+
+  isInput(instruction) {
+    return instruction.trim().startsWith("вход");
   }
 
   performOutput(instruction) {
@@ -89,10 +110,24 @@ export class Afbpl1Interpreter {
     }
     const valueToOutput = instruction.substring(stringEnds[0].index + 1, stringEnds[1].index);
     writeLine(valueToOutput);
+  }
 
-    return {
-      isError: false,
-    };
+  prepareForInput(instruction) {
+    var interpreter = this;
+    const variableName = instruction.trim().split(' ')[1];
+    function onread(valueRead) {
+      interpreter.setVariable(variableName, valueRead);
+      // нещо като runProgram
+      interpreter.continue();
+      interpreter = null;
+    }
+
+    readLine(onread);
+  }
+
+  setVariable(variableName, newValue) {
+    console.log(variableName + ' = ' + newValue);
+    this.symbolTable[variableName] = newValue;
   }
 
   // Get the instructions of the program.
