@@ -37,19 +37,25 @@ export class Afbpl1Interpreter {
       }
       const inst = this.instructions[this.currentLine];
       if (this.isEnd(inst)) {
-        break;
+        const hasCompletedSuccessfully = {
+          isError: false,
+          message: "Изпълнението на програмата приключи успешно."
+        };
+        return hasCompletedSuccessfully;
       }
       if (this.isStart(inst)) {
-        return {
+        const error = {
           isError: true,
           message: "Изпълнението на програмата стигна повторно до 'начало', " +
             "без преди това да срещне 'край'."
         };
+        return error;
       }
       if (this.isOutput(inst)) {
         const maybeError = this.performOutput(inst);
         if (maybeError.isError) {
-          return maybeError;
+          const error = maybeError;
+          return error;
         }
         continue;
       }
