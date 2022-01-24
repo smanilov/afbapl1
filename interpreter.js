@@ -1,4 +1,4 @@
-import { writeLine, readLine } from './io_area.js';
+import { clear, readLine, writeLine } from './io_area.js';
 
 export const hasCompletedSuccessfully = {
   isError: false,
@@ -42,6 +42,8 @@ export class Afbpl1Interpreter {
     if (unitOffsetOrError.isError) {
       return unitOffsetOrError;
     }
+
+    clear();
   }
 
   // Continue the interpretation of the program from the last interpreted

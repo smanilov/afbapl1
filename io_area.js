@@ -10,6 +10,11 @@ function setIOText(element, newText/*: string*/) {
   element.value = newText;
 }
 
+// Clears the IO textarea from any text.
+export function clear() {
+  setIOText(getElement(), '');
+}
+
 export function write(newText/*: string*/) {
   let element = getElement();
   let text = getIOText(element);
