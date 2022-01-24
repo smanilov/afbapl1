@@ -34,17 +34,19 @@ export class Afbpl1Interpreter {
       if (this.isEnd(inst)) {
         break;
       }
-      if (this.isOutput(inst)) {
-        const maybeError = this.performOutput(inst);
-        if (maybeError.isError) {
-          return maybeError;
-        }
-      } else if (this.isStart(inst)) {
+      if (this.isStart(inst)) {
         return {
           isError: true,
           message: "Изпълнението на програмата стигна повторно до 'начало', " +
             "без преди това да срещне 'край'."
         };
+      }
+      if (this.isOutput(inst)) {
+        const maybeError = this.performOutput(inst);
+        if (maybeError.isError) {
+          return maybeError;
+        }
+        continue;
       }
     }
   }
