@@ -30,7 +30,7 @@ export function writeLine(newText/*: string*/) {
 var onread = null;
 var fixedIOTextLength = null;
 
-export function readLine(callback) {
+export function readLineAndThen(callback) {
   onread = callback;
   write('> ');
   fixedIOTextLength = getIOText(getElement()).length;

@@ -1,23 +1,23 @@
-import { clear, readLine, writeLine } from './io_area.js';
+import { clear, readLineAndThen, writeLine } from './io_area.js';
 
-export const hasCompletedSuccessfully = {
+const hasCompletedSuccessfully = {
   isError: false,
-  message: "Изпълнението на програмата приключи успешно."
+  message: "Изпълнението на програмата приключи успешно!"
 };
 
-export const reachedStartAgainError = {
+const reachedStartAgainError = {
   isError: true,
   message: "Изпълнението на програмата стигна повторно до 'начало', " +
     "без преди това да срещне 'край'."
 };
 
-export const waitingForInput = {
+const waitingForInput = {
   isError: false,
   message: "Изпълнението на програмата е временно спряно, докато " +
     "потребителя въведе нужния вход."
 }
 
-export class Afbpl1Interpreter {
+class Afbpl1Interpreter {
   /*
   rawSource: string;
   startLine: number;
@@ -42,15 +42,13 @@ export class Afbpl1Interpreter {
     if (unitOffsetOrError.isError) {
       return unitOffsetOrError;
     }
-
-    clear();
   }
 
   // Continue the interpretation of the program from the last interpreted
   // statement.
   //
   // At the beginning, this would be the 'начало' statement.
-  continue() {
+  resume() {
     for (this.currentLine++; ; this.currentLine++) {
       if (this.currentLine == this.instructions.length) {
         this.currentLine = 0;
@@ -147,16 +145,12 @@ export class Afbpl1Interpreter {
   }
 
   prepareForInput(instruction) {
-    var interpreter = this;
     const variableName = instruction.trim().split(' ')[1];
-    function onread(valueRead) {
-      interpreter.setVariable(variableName, valueRead);
-      // нещо като runProgram
-      interpreter.continue();
-      interpreter = null;
-    }
 
-    readLine(onread);
+    readLineAndThen((valueRead) => {
+      theInterpreter.setVariable(variableName, valueRead);
+      resumeInterpreter();
+    });
   }
 
   setVariable(variableName, newValue) {
@@ -217,15 +211,21 @@ export class Afbpl1Interpreter {
 
   // Returns the indentation difference between the start line and the following
   // line, if it's a positive integer.
+  //
+  // Returns 0 only in the case of the trivial program containing only a start
+  // and an end.
+  //
   // Otherwise, returns an error.
   computeUnitOffset(startLine/*: number*/) {
     const baseIndent = this.computeIndent(this.instructions[startLine]);
     var currentLine = startLine + 1;
     // skip empty lines
     while (this.instructions[currentLine].trim() === "") ++currentLine;
-    const nextIndent = this.computeIndent(this.instructions[currentLine]);
+    const nextInst = this.instructions[currentLine];
+    const nextIndent = this.computeIndent(nextInst);
 
-    if (baseIndent < nextIndent) {
+    if ((baseIndent < nextIndent) ||
+      (baseIndent == nextIndent && this.isEnd(nextInst))) {
       return {
         isError: false,
         value: nextIndent - baseIndent
@@ -248,5 +248,48 @@ export class Afbpl1Interpreter {
       "instructions or comments.";
     }
     return index;
+  }
+}
+
+var theInterpreter = null;
+
+// Creates a new interpreter object and stores it in the global singleton
+// variable and returns 'true'.
+//
+// Fails if the given source does not have a single "начало" or if there is an
+// indentation problem and returns 'false'.
+export function createInterpreter(source) {
+  clear();
+
+  const interpreter = new Afbpl1Interpreter(source);
+
+  const result = interpreter.init();
+  if (result && result.isError) {
+    writeLine("Грешка: " + result.message);
+    return false;
+  }
+
+  theInterpreter = interpreter;
+  return true;
+}
+
+// Resumes the interpreter.
+//
+// Assumes that the interpreter singleton is not null.
+export function resumeInterpreter() {
+  const result = theInterpreter.resume();
+  if (!result) {
+    throw "Internal error: interpreter.resume() didn't return a value.";
+  }
+  if (result.isError) {
+    writeLine("Грешка: " + result.message);
+    theInterpreter = null;
+  }
+  if (result == hasCompletedSuccessfully) {
+    writeLine(result.message);
+    theInterpreter = null;
+  }
+  if (result == waitingForInput) {
+    // return from function when waiting for input
   }
 }
