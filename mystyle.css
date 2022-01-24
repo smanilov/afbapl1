@@ -13,3 +13,8 @@
   margin-top: 16px;
   resize: vertical;
 }
+
+#ioText {
+  font-family: monospace;
+  margin-top: 16px;
+}
