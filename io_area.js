@@ -52,8 +52,20 @@ function isCursorAtEnd(element) {
 export function configureIOEditBehavior() {
   let element = getElement();
   element.addEventListener("beforeinput", function (event) {
-    if (onread == null) {
+    const isWaitingForInput = onread != null;
+    const isEditingOldText = element.selectionStart < fixedIOTextLength;
+    const isBackspacingLastFixedChar =
+      element.selectionStart == element.selectionEnd &&
+      element.selectionStart == fixedIOTextLength &&
+      event.inputType.match('delete.*Backward');
+    if (!isWaitingForInput || isEditingOldText || isBackspacingLastFixedChar) {
       event.preventDefault();
+      return;
+    }
+
+    if (event.inputType === "insertLineBreak") {
+      element.selectionStart = getIOText(element).length;
+      element.selectionEnd = element.selectionStart;
     }
   });
 
