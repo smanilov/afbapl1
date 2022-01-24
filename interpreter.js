@@ -1,4 +1,4 @@
-import * as io from './io_area.js';
+import { writeLine } from './io_area.js';
 
 export class Afbpl1Interpreter {
   /*
@@ -75,7 +75,7 @@ export class Afbpl1Interpreter {
       };
     }
     const valueToOutput = instruction.substring(stringEnds[0].index + 1, stringEnds[1].index);
-    io.writeLine(valueToOutput);
+    writeLine(valueToOutput);
 
     return {
       isError: false,

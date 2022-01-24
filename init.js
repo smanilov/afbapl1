@@ -1,16 +1,7 @@
-import { getSource, setSource } from './source_area.js';
-
-// Keeps source across page reloads.
-function configureSourcePersistance() {
-  window.addEventListener("beforeunload", function (event) {
-    window.localStorage.setItem('sourceCode', getSource());
-  });
-
-  window.addEventListener('DOMContentLoaded', (event) => {
-    setSource(window.localStorage.getItem('sourceCode'));
-  });
-}
+import { configureSourcePersistance } from './source_area.js';
+import { configureIOEditBehavior } from './io_area.js';
 
 export function init() {
   configureSourcePersistance();
+  configureIOEditBehavior();
 }
