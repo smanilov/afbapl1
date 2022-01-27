@@ -4,14 +4,26 @@
 }
 
 #runButton {
-  width: 664px;
+  width: 600px;
   font-size: xx-large;
 }
 
 #sourceCode {
   font-family: monospace;
   margin-top: 16px;
+  padding: 2px;
+  width: 600px;
+  min-height: 400px;
+  border-style: solid;
+  border-width: 1px;
+  border-color: grey;
+  border-radius: 2px;
   resize: vertical;
+}
+
+#sourceCode:focus {
+  outline: 1px solid cornflowerblue !important;
+  border: 1px solid cornflowerblue;
 }
 
 #ioText {
