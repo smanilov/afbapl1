@@ -30,3 +30,23 @@
   font-family: monospace;
   margin-top: 16px;
 }
+
+.codeKeyword {
+  color: #af00db;
+}
+
+.codeOperator {
+  color: #795e26;
+}
+
+.codeLiteral {
+  color: #a31515;
+}
+
+.codeError {
+  background-color: pink;
+}
+
+.codeVariable {
+  color: #0070c1;
+}

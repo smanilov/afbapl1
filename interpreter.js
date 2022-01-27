@@ -17,28 +17,27 @@ const waitingForInput = {
     "потребителя въведе нужния вход."
 }
 
+
 class Afbpl1Interpreter {
   /*
-  rawSource: string;
+  source: SourceCode;
   startLine: number;
-  instructions: string[];
   numberedInstructions: { line: number, value: string }[];
   trimmedInstructions: { line: number, value: string }[];
   */
 
-  constructor(rawSource/*: string*/) {
-    this.rawSource = rawSource;
+  constructor(source/*: SourceCode*/) {
+    this.source = source;
     this.symbolTable = {};
   }
 
   init() {
-    this.instructions = this.rawSource.split('\n');
-
     const startLineOrError = this.findStartLine();
     if (startLineOrError.isError) {
       return startLineOrError;
     }
     this.currentLine = startLineOrError.value;
+    this.source.markStart(this.currentLine);
 
     const unitOffsetOrError = this.computeUnitOffset(this.currentLine);
     if (unitOffsetOrError.isError) {
@@ -52,14 +51,16 @@ class Afbpl1Interpreter {
   // At the beginning, this would be the 'начало' statement.
   resume() {
     for (this.currentLine++; ; this.currentLine++) {
-      if (this.currentLine == this.instructions.length) {
+      if (this.currentLine == this.source.instructions.length) {
         this.currentLine = 0;
       }
-      const inst = this.instructions[this.currentLine];
+      const inst = this.source.instructions[this.currentLine];
       if (this.isEnd(inst)) {
+        this.source.markEnd(this.currentLine);
         return hasCompletedSuccessfully;
       }
       if (this.isStart(inst)) {
+        this.source.markStart(this.currentLine);
         return reachedStartAgainError;
       }
       if (this.isOutput(inst)) {
@@ -102,29 +103,35 @@ class Afbpl1Interpreter {
       throw "Internal error: performOutput called on an instruction that is " +
       "not an output instruction, but [" + instruction + "]";
     }
+    this.source.markOutput(this.currentLine);
 
     const stringEnds = Array.from(instruction.matchAll("\""));
     const argumentIsStringLiteral = stringEnds.length == 2;
 
-    const trimmed_inst = instruction.trim();
+    const indent = this.computeIndent(instruction);
     const kwLength = "изход".length;
-    const isKeywordFollowedBySpace = trimmed_inst[kwLength] === ' ';
+    const isKeywordFollowedBySpace = instruction[indent + kwLength] === ' ';
 
-    const argument = trimmed_inst.substring(kwLength + 1);
-    const argumentContainsSpaces = argument.indexOf(' ') !== -1;
+    const argument = instruction.substring(indent + kwLength + 1);
 
     var valueToOutput;
     if (argumentIsStringLiteral) {
-      valueToOutput = instruction.substring(stringEnds[0].index + 1, stringEnds[1].index);
+      valueToOutput = instruction.substring(
+        stringEnds[0].index + 1,
+        stringEnds[1].index
+      );
+      this.source.markStringLiteral(
+        this.currentLine,
+        stringEnds[0].index,
+        stringEnds[1].index + 1
+      );
     } else {
       if (!isKeywordFollowedBySpace) {
-        return {
-          isError: true,
-          message: "Инструкцията за изход трябва да е последвана от празно " +
-            "място, ако аргументът не е текст в кавички."
-        };
-      }
-      if (argumentContainsSpaces) {
+        this.source.markError(
+          this.currentLine,
+          indent + kwLength,
+          indent + kwLength + 1
+        )
         return {
           isError: true,
           message: "Инструкцията за изход трябва да е последвана от празно " +
@@ -132,12 +139,22 @@ class Afbpl1Interpreter {
         };
       }
       if (!this.hasVariable(argument)) {
+        this.source.markError(
+          this.currentLine,
+          indent + kwLength + 1,
+          indent + kwLength + 1 + argument.length
+        )
         return {
           isError: true,
           message: "Инструкцията за изход трябва да е последвана от име на известна вече променлива, или текст в " +
             "двойни кавички (\")."
         };
       }
+      this.source.markVariable(
+        this.currentLine,
+        indent + kwLength + 1,
+        indent + kwLength + 1 + argument.length
+      )
       valueToOutput = this.getVariable(argument);
     }
 
@@ -145,10 +162,22 @@ class Afbpl1Interpreter {
   }
 
   prepareForInput(instruction) {
-    const variableName = instruction.trim().split(' ')[1];
+    this.source.markInput(this.currentLine);
+
+    // TODO: do fun stuff
+
+    const indent = this.computeIndent(instruction);
+    const kwLength = "вход".length;
+    const argument = instruction.substring(indent + kwLength + 1);
+    
+    this.source.markVariable(
+      this.currentLine,
+      indent + kwLength + 1,
+      indent + kwLength + 1 + argument.length
+    )
 
     readLineAndThen((valueRead) => {
-      theInterpreter.setVariable(variableName, valueRead);
+      theInterpreter.setVariable(argument, valueRead);
       resumeInterpreter();
     });
   }
@@ -172,9 +201,9 @@ class Afbpl1Interpreter {
   //
   // If there are not exactly one "начало", an error is returned.
   findStartLine() {
-    var numberedInstructions = new Array(this.instructions.length);
-    for (let i = 0; i < this.instructions.length; i++) {
-      numberedInstructions[i] = { line: i, value: this.instructions[i] };
+    var numberedInstructions = new Array(this.source.instructions.length);
+    for (let i = 0; i < this.source.instructions.length; i++) {
+      numberedInstructions[i] = { line: i, value: this.source.instructions[i] };
     }
 
     const starts = numberedInstructions.filter(
@@ -203,11 +232,11 @@ class Afbpl1Interpreter {
   //
   // Otherwise, returns an error.
   computeUnitOffset(startLine/*: number*/) {
-    const baseIndent = this.computeIndent(this.instructions[startLine]);
+    const baseIndent = this.computeIndent(this.source.instructions[startLine]);
     var currentLine = startLine + 1;
     // skip empty lines
-    while (this.instructions[currentLine].trim() === "") ++currentLine;
-    const nextInst = this.instructions[currentLine];
+    while (this.source.instructions[currentLine].trim() === "") ++currentLine;
+    const nextInst = this.source.instructions[currentLine];
     const nextIndent = this.computeIndent(nextInst);
 
     if ((baseIndent < nextIndent) ||
@@ -244,10 +273,10 @@ var theInterpreter = null;
 //
 // Fails if the given source does not have a single "начало" or if there is an
 // indentation problem and returns 'false'.
-export function createInterpreter(source) {
+export function createInterpreter(source, setSource) {
   clear();
 
-  const interpreter = new Afbpl1Interpreter(source);
+  const interpreter = new Afbpl1Interpreter(source, setSource);
 
   const result = interpreter.init();
   if (result && result.isError) {
