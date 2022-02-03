@@ -29,6 +29,7 @@ class Afbpl1Interpreter {
   constructor(source/*: SourceCode*/) {
     this.source = source;
     this.symbolTable = {};
+    this.typeOf = {};
   }
 
   init() {
@@ -164,12 +165,10 @@ class Afbpl1Interpreter {
   prepareForInput(instruction) {
     this.source.markInput(this.currentLine);
 
-    // TODO: do fun stuff
-
     const indent = this.computeIndent(instruction);
     const kwLength = "вход".length;
     const argument = instruction.substring(indent + kwLength + 1);
-    
+
     this.source.markVariable(
       this.currentLine,
       indent + kwLength + 1,
@@ -194,7 +193,19 @@ class Afbpl1Interpreter {
 
   // Sets the value of a variable in the symbol table.
   setVariable(variableName, newValue) {
-    this.symbolTable[variableName] = newValue;
+    const intValue = parseInt(newValue, 10);
+    const floatValue = parseFloat(newValue, 10);
+    if (!isNaN(intValue) && intValue == floatValue && ('' + intValue) === newValue.trim()) {
+      this.symbolTable[variableName] = intValue;
+      this.typeOf[variableName] = 'целочислен';
+    } else if (!isNaN(floatValue) && ('' + floatValue) === newValue.trim()) {
+      this.symbolTable[variableName] = floatValue;
+      this.typeOf[variableName] = 'дробно число';
+    } else {
+      this.symbolTable[variableName] = newValue;
+      this.typeOf[variableName] = 'текст';
+    }
+    console.log('type of ' + variableName + ' is ' + this.typeOf[variableName]);
   }
 
   // Returns the line at which the only "начало" in the program can be found.

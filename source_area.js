@@ -62,7 +62,6 @@ export function getSource() {
 }
 
 function setSource(source/*: SourceCode*/) {
-  console.log(source);
   $("#sourceCode")[0].innerHTML = addTags(source);
 }
 
