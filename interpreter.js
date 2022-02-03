@@ -17,6 +17,11 @@ const waitingForInput = {
     "потребителя въведе нужния вход."
 }
 
+// Returns the last element of an array, assuming that it has at least one element.
+function lastOf(array) {
+  return array[array.length - 1];
+}
+
 
 class Afbpl1Interpreter {
   /*
@@ -30,6 +35,7 @@ class Afbpl1Interpreter {
     this.source = source;
     this.symbolTable = {};
     this.typeOf = {};
+    this.conditionalStack = [];
   }
 
   init() {
@@ -44,6 +50,7 @@ class Afbpl1Interpreter {
     if (unitOffsetOrError.isError) {
       return unitOffsetOrError;
     }
+    this.unitOffset = unitOffsetOrError.unitOffset;
   }
 
   // Continue the interpretation of the program from the last interpreted
@@ -51,11 +58,20 @@ class Afbpl1Interpreter {
   //
   // At the beginning, this would be the 'начало' statement.
   resume() {
+    loop1:
     for (this.currentLine++; ; this.currentLine++) {
       if (this.currentLine == this.source.instructions.length) {
         this.currentLine = 0;
       }
+
       const inst = this.source.instructions[this.currentLine];
+
+      if (this.isEmpty(inst)) {
+        continue;
+      }
+
+      const indent = this.computeIndent(inst);
+
       if (this.isEnd(inst)) {
         this.source.markEnd(this.currentLine);
         return hasCompletedSuccessfully;
@@ -64,6 +80,39 @@ class Afbpl1Interpreter {
         this.source.markStart(this.currentLine);
         return reachedStartAgainError;
       }
+
+      if (this.conditionalStack.length) {
+        do {
+          var keepItPoppin = false;
+          const lastConditional = lastOf(this.conditionalStack);
+          if (lastConditional.indent == indent) {
+            if (this.isElse(inst)) {
+              lastConditional.isNegated = true;
+              this.source.markElse(this.currentLine);
+              continue loop1;
+            } else {
+              this.conditionalStack.pop();
+            }
+          } else if (lastConditional.indent > indent) {
+            this.conditionalStack.pop();
+            keepItPoppin = true;
+          }
+        } while (keepItPoppin && this.conditionalStack.length);
+      }
+
+      if (this.conditionalStack.length) {
+        const lastConditional = lastOf(this.conditionalStack);
+        if (lastConditional.indent >= indent) {
+          throw "Internal error: lastConditional expected to have lower " +
+          "indent at this point";
+        }
+
+        if ((lastConditional.holds && lastConditional.isNegated) ||
+          (!lastConditional.holds && !lastConditional.isNegated)) {
+          continue;
+        }
+      }
+
       if (this.isOutput(inst)) {
         const maybeError = this.performOutput(inst);
         if (maybeError && maybeError.isError) {
@@ -73,30 +122,47 @@ class Afbpl1Interpreter {
         continue;
       }
       if (this.isInput(inst)) {
-        const maybeError = this.prepareForInput(inst);
-        if (maybeError && maybeError.isError) {
-          const error = maybeError;
+        this.prepareForInput(inst);
+        return waitingForInput;
+      }
+      if (this.isConditional(inst)) {
+        const conditionalOrError = this.performConditional(inst);
+        if (conditionalOrError.isError) {
+          const error = conditionalOrError;
           return error;
         }
-        return waitingForInput;
+        const conditional = conditionalOrError;
+        this.conditionalStack.push(conditional);
       }
     }
   }
 
+  isEmpty(instruction) {
+    return instruction.trim() === '';
+  }
+
   isStart(instruction) {
-    return instruction.trim() === "начало";
+    return instruction.trim() === 'начало';
   }
 
   isEnd(instruction) {
-    return instruction.trim() === "край";
+    return instruction.trim() === 'край';
   }
 
   isOutput(instruction) {
-    return instruction.trim().startsWith("изход");
+    return instruction.trim().startsWith('изход');
   }
 
   isInput(instruction) {
-    return instruction.trim().startsWith("вход");
+    return instruction.trim().startsWith('вход');
+  }
+
+  isConditional(instruction) {
+    return instruction.trim().startsWith('ако');
+  }
+
+  isElse(instruction) {
+    return instruction.trim().startsWith('иначе');
   }
 
   performOutput(instruction) {
@@ -181,6 +247,106 @@ class Afbpl1Interpreter {
     });
   }
 
+  performConditional(instruction) {
+    this.source.markConditional(this.currentLine);
+
+    const indent = this.computeIndent(instruction);
+    const kwLength = "ако".length;
+    const argument = instruction.substring(indent + kwLength + 1).trim();
+
+    var operand1 = null, operand2 = null;
+    for (const [key, ] of Object.entries(this.symbolTable)) {
+      if (argument.startsWith(key)) {
+        operand1 = key;
+        this.source.markVariable(
+          this.currentLine,
+          indent + kwLength + 1,
+          indent + kwLength + 1 + key.length
+        );
+      }
+      if (argument.endsWith(key)) {
+        operand2 = key;
+        this.source.markVariable(
+          this.currentLine,
+          indent + kwLength + 1 + argument.length - key.length,
+          indent + kwLength + 1 + argument.length
+        );
+      }
+    }
+
+    if (operand1 == null && operand2 == null) {
+      this.source.markError(
+        this.currentLine,
+        indent + kwLength + 1,
+        indent + kwLength + 1 + argument.length
+      )
+      return {
+        isError: true,
+        message: "Поне една от страните на проверката трябва да е вече " +
+          "известна променлива."
+      };
+    }
+
+    var operator = null;
+    if (operand1 != null) {
+      operator = argument.substring(operand1.length);
+      operator = operator.trim();
+      operator = operator.split(' ')[0];
+
+      var start = argument.indexOf(operator, operand1.length);
+      var end = start + operator.length;
+
+      if (operand2 == null) {
+        operand2 = argument.substring(end).trim();
+      } else {
+
+      }
+
+      start += indent + kwLength + 1;
+      end += indent + kwLength + 1;
+      this.source.markArithmetic(this.currentLine, start, end);
+    } else {
+      // operand1 == null && operand2 != null
+      operator = argument.substring(0, argument.length - operand2.length);
+      operator = operator.trim();
+      operator = operator.split(' ');
+      operator = lastOf(operator);
+
+      var start = argument.lastIndexOf(operator, argument.length - operand2.length);
+      var end = start + operator.length;
+      operand1 = argument.substring(0, end).trim();
+
+      start += indent + kwLength + 1;
+      end += indent + kwLength + 1;
+      this.source.markArithmetic(this.currentLine, start, end);
+    }
+
+    return {
+      isError: false,
+      indent: indent,
+      holds: this.performOperator(operator, operand1, operand2),
+      isNegated: false,
+    };
+  }
+
+  performOperator(operator, operand1, operand2) {
+    if (operator == "е") {
+      if (operand1 in this.symbolTable) {
+        if (operand2 in this.symbolTable) {
+          return this.symbolTable[operand1] === this.symbolTable[operand2];
+        }
+        // TODO:
+        if (this.typeOf[operand1] == 'целочислен') {
+          return this.symbolTable[operand1] == parseInt(operand2);
+        }
+      } else {
+        if (this.typeOf[operand2] == 'целочислен') {
+          return this.symbolTable[operand2] == parseInt(operand1);
+        }
+      }
+    }
+  }
+
   // Whether a variable of the given name has been given value already.
   hasVariable(variableName) {
     return variableName in this.symbolTable;
@@ -254,7 +420,7 @@ class Afbpl1Interpreter {
       (baseIndent == nextIndent && this.isEnd(nextInst))) {
       return {
         isError: false,
-        value: nextIndent - baseIndent
+        unitOffset: nextIndent - baseIndent
       };
     }
 

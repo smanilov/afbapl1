@@ -42,6 +42,10 @@ class Annotation {
     return this.label.startsWith("Variable");
   }
 
+  isArithmetic() {
+    return this.label.startsWith("Arithmetic");
+  }
+
   getCssClass() {
     if (this.isKeyword()) {
       return "codeKeyword";
@@ -57,6 +61,9 @@ class Annotation {
     }
     if (this.isVariable()) {
       return "codeVariable";
+    }
+    if (this.isArithmetic()) {
+      return "codeArithmetic";
     }
     
     throw "Internal error: unsupported annotation label [" + this.label + "]";
@@ -100,6 +107,18 @@ export class SourceCode {
     this.markCategory(instIndex, 'вход', 'OperatorInput');
   }
 
+  markConditional(instIndex) {
+    this.markCategory(instIndex, 'ако', 'OperatorConditional');
+  }
+
+  markElse(instIndex) {
+    this.markCategory(instIndex, 'иначе', 'OperatorElse');
+  }
+
+  markArithmetic(instIndex, start, end) {
+    this.markSpan(instIndex, start, end, 'Arithmetic');
+  }
+
   markStringLiteral(instIndex, start, end) {
     this.markSpan(instIndex, start, end, 'LiteralString');
   }
@@ -132,7 +151,7 @@ export class SourceCode {
     // Assuming annotations don't overlap for now.
     var i = 0;
     for (i = 0; i < this.annotations.length; ++i) {
-      if (this.annotations.start > annotationStart) break;
+      if (this.annotations[i].start > annotationStart) break;
     }
     this.annotations.splice(i, 0, annotation);
     
