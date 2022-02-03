@@ -1,4 +1,5 @@
 import { clear, readLineAndThen, writeLine } from './io_area.js';
+import { isInt, isFloat, isStringLiteral } from './type_checking.js';
 
 const hasCompletedSuccessfully = {
   isError: false,
@@ -20,6 +21,15 @@ const waitingForInput = {
 // Returns the last element of an array, assuming that it has at least one element.
 function lastOf(array) {
   return array[array.length - 1];
+}
+
+// Returns the contents of a string literal, stripping the double quotes.
+function parseString(stringLiteral) {
+  if (!isStringLiteral(stringLiteral)) {
+    throw "Internal error: stringLiteral expected to be a string literal";
+  }
+
+  return stringLiteral.substring(1, stringLiteral.length - 1);
 }
 
 
@@ -179,7 +189,8 @@ class Afbpl1Interpreter {
     const kwLength = "изход".length;
     const isKeywordFollowedBySpace = instruction[indent + kwLength] === ' ';
 
-    const argument = instruction.substring(indent + kwLength + 1);
+    const argumentStart = indent + kwLength + 1;
+    const argument = instruction.substring(argumentStart);
 
     var valueToOutput;
     if (argumentIsStringLiteral) {
@@ -196,8 +207,8 @@ class Afbpl1Interpreter {
       if (!isKeywordFollowedBySpace) {
         this.source.markError(
           this.currentLine,
-          indent + kwLength,
-          indent + kwLength + 1
+          argumentStart - 1,
+          argumentStart
         )
         return {
           isError: true,
@@ -208,19 +219,19 @@ class Afbpl1Interpreter {
       if (!this.hasVariable(argument)) {
         this.source.markError(
           this.currentLine,
-          indent + kwLength + 1,
-          indent + kwLength + 1 + argument.length
+          argumentStart,
+          argumentStart + argument.length
         )
         return {
           isError: true,
-          message: "Инструкцията за изход трябва да е последвана от име на известна вече променлива, или текст в " +
-            "двойни кавички (\")."
+          message: "Инструкцията за изход трябва да е последвана от име на " +
+            "известна вече променлива, или текст в двойни кавички (\")."
         };
       }
       this.source.markVariable(
         this.currentLine,
-        indent + kwLength + 1,
-        indent + kwLength + 1 + argument.length
+        argumentStart,
+        argumentStart + argument.length
       )
       valueToOutput = this.getVariable(argument);
     }
@@ -233,12 +244,13 @@ class Afbpl1Interpreter {
 
     const indent = this.computeIndent(instruction);
     const kwLength = "вход".length;
-    const argument = instruction.substring(indent + kwLength + 1);
+    const argumentStart = indent + kwLength + 1;
+    const argument = instruction.substring(argumentStart);
 
     this.source.markVariable(
       this.currentLine,
-      indent + kwLength + 1,
-      indent + kwLength + 1 + argument.length
+      argumentStart,
+      argumentStart + argument.length
     )
 
     readLineAndThen((valueRead) => {
@@ -252,24 +264,25 @@ class Afbpl1Interpreter {
 
     const indent = this.computeIndent(instruction);
     const kwLength = "ако".length;
-    const argument = instruction.substring(indent + kwLength + 1).trim();
+    const argumentStart = indent + kwLength + 1;
+    const argument = instruction.substring(argumentStart).trim();
 
     var operand1 = null, operand2 = null;
-    for (const [key, ] of Object.entries(this.symbolTable)) {
+    for (const [key,] of Object.entries(this.symbolTable)) {
       if (argument.startsWith(key)) {
         operand1 = key;
         this.source.markVariable(
           this.currentLine,
-          indent + kwLength + 1,
-          indent + kwLength + 1 + key.length
+          argumentStart,
+          argumentStart + key.length
         );
       }
       if (argument.endsWith(key)) {
         operand2 = key;
         this.source.markVariable(
           this.currentLine,
-          indent + kwLength + 1 + argument.length - key.length,
-          indent + kwLength + 1 + argument.length
+          argumentStart + argument.length - key.length,
+          argumentStart + argument.length
         );
       }
     }
@@ -277,8 +290,8 @@ class Afbpl1Interpreter {
     if (operand1 == null && operand2 == null) {
       this.source.markError(
         this.currentLine,
-        indent + kwLength + 1,
-        indent + kwLength + 1 + argument.length
+        argumentStart,
+        argumentStart + argument.length
       )
       return {
         isError: true,
@@ -297,13 +310,17 @@ class Afbpl1Interpreter {
       var end = start + operator.length;
 
       if (operand2 == null) {
-        operand2 = argument.substring(end).trim();
+        operand2 = {
+          text: argument.substring(end).trim(),
+          start: argumentStart + end + 1,
+          end: argumentStart + argument.length
+        }
       } else {
 
       }
 
-      start += indent + kwLength + 1;
-      end += indent + kwLength + 1;
+      start += argumentStart;
+      end += argumentStart;
       this.source.markArithmetic(this.currentLine, start, end);
     } else {
       // operand1 == null && operand2 != null
@@ -313,38 +330,115 @@ class Afbpl1Interpreter {
       operator = lastOf(operator);
 
       var start = argument.lastIndexOf(operator, argument.length - operand2.length);
-      var end = start + operator.length;
-      operand1 = argument.substring(0, end).trim();
+      operand1 = {
+        text: argument.substring(0, start).trim(),
+        start: argumentStart,
+        end: argumentStart + start - 1
+      };
 
-      start += indent + kwLength + 1;
-      end += indent + kwLength + 1;
+      start += argumentStart;
+      const end = start + operator.length;
       this.source.markArithmetic(this.currentLine, start, end);
+    }
+
+    const holdsOrError = this.performArithmetic(operator, operand1, operand2);
+    if (holdsOrError.isError) {
+      const error = holdsOrError;
+      return error;
     }
 
     return {
       isError: false,
       indent: indent,
-      holds: this.performOperator(operator, operand1, operand2),
+      holds: holdsOrError,
       isNegated: false,
     };
   }
 
-  performOperator(operator, operand1, operand2) {
+  performArithmetic(operator, operand1, operand2) {
     if (operator == "е") {
       if (operand1 in this.symbolTable) {
-        if (operand2 in this.symbolTable) {
-          return this.symbolTable[operand1] === this.symbolTable[operand2];
-        }
-        // TODO:
-        if (this.typeOf[operand1] == 'целочислен') {
-          return this.symbolTable[operand1] == parseInt(operand2);
-        }
+        return this.performComparison(operand1, operand2);
       } else {
-        if (this.typeOf[operand2] == 'целочислен') {
-          return this.symbolTable[operand2] == parseInt(operand1);
-        }
+        return this.performComparison(operand2, operand1);
       }
     }
+  }
+
+  performComparison(operand1, operand2) {
+    if (operand2 in this.symbolTable) {
+      return this.symbolTable[operand1] === this.symbolTable[operand2];
+    }
+
+    var comparisonResult =
+      this.tryPerformIntegerToLiteralComparison(operand1, operand2);
+    if (!comparisonResult.typeMismatch) {
+      return comparisonResult;
+    }
+
+    comparisonResult =
+      this.tryPerformFloatToLiteralComparison(operand1, operand2);
+    if (!comparisonResult.typeMismatch) {
+      return comparisonResult;
+    }
+
+    return this.performStringToLiteralComparison(operand1, operand2);
+  }
+
+  // Checks if the type of the operand is integer and then performs a
+  // comparison to a literal.
+  // 
+  // If the type check fails the return value will contain .typeMismatch = true.
+  tryPerformIntegerToLiteralComparison(operand, literal) {
+    if (this.typeOf[operand] != 'целочислен') {
+      return { typeMismatch: true };
+    }
+
+    if (!isInt(literal.text)) {
+      this.source.markError(this.currentLine, literal.start, literal.end);
+      return {
+        isError: true,
+        message: "Типа на " + operand + " е целочислен, а " + literal.text +
+          " не е цяло число."
+      };
+    }
+    this.source.markIntLiteral(this.currentLine, literal.start, literal.end);
+    return this.symbolTable[operand] == parseInt(literal.text);
+  }
+
+  // Checks if the type of the operand is float and then performs a
+  // comparison to a literal.
+  // 
+  // If the type check fails the return value will contain .typeMismatch = true.
+  tryPerformFloatToLiteralComparison(operand, literal) {
+    if (this.typeOf[operand] != 'дробно число') {
+      return { typeMismatch: true };
+    }
+
+    if (!isFloat(literal.text)) {
+      this.source.markError(this.currentLine, literal.start, literal.end);
+      return {
+        isError: true,
+        message: "Типа на " + operand + " е дробно число, а " + literal.text +
+          " не е число."
+      };
+    }
+    this.source.markFloatLiteral(this.currentLine, literal.start, literal.end);
+    return this.symbolTable[operand] == parseFloat(literal.text);
+  }
+
+  performStringToLiteralComparison(operand, literal) {
+    if (!isStringLiteral(literal.text)) {
+      this.source.markError(this.currentLine, literal.start, literal.end);
+      return {
+        isError: true,
+        message: "Типа на " + operand + " е текст, а " + literal.text +
+          " не е текст заграден в двойни кавички."
+      };
+    }
+
+    this.source.markStringLiteral(this.currentLine, literal.start, literal.end);
+    return this.symbolTable[operand] == parseString(literal.text);
   }
 
   // Whether a variable of the given name has been given value already.
@@ -359,13 +453,11 @@ class Afbpl1Interpreter {
 
   // Sets the value of a variable in the symbol table.
   setVariable(variableName, newValue) {
-    const intValue = parseInt(newValue, 10);
-    const floatValue = parseFloat(newValue, 10);
-    if (!isNaN(intValue) && intValue == floatValue && ('' + intValue) === newValue.trim()) {
-      this.symbolTable[variableName] = intValue;
+    if (isInt(newValue)) {
+      this.symbolTable[variableName] = parseInt(newValue, 10);
       this.typeOf[variableName] = 'целочислен';
-    } else if (!isNaN(floatValue) && ('' + floatValue) === newValue.trim()) {
-      this.symbolTable[variableName] = floatValue;
+    } else if (isFloat(newValue)) {
+      this.symbolTable[variableName] = parseFloat(newValue, 10);
       this.typeOf[variableName] = 'дробно число';
     } else {
       this.symbolTable[variableName] = newValue;

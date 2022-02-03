@@ -39,8 +39,12 @@
   color: #795e26;
 }
 
-.codeLiteral {
+.codeStringLiteral {
   color: #a31515;
+}
+
+.codeNumberLiteral {
+  color: #098658;
 }
 
 .codeError {

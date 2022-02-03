@@ -30,8 +30,12 @@ class Annotation {
     return this.label.startsWith("Operator");
   }
 
-  isLiteral() {
-    return this.label.startsWith("Literal");
+  isStringLiteral() {
+    return this.label == "StringLiteral";
+  }
+
+  isNumberLiteral() {
+    return this.label.startsWith("NumberLiteral");
   }
 
   isError() {
@@ -53,8 +57,11 @@ class Annotation {
     if (this.isOperator()) {
       return "codeOperator";
     }
-    if (this.isLiteral()) {
-      return "codeLiteral";
+    if (this.isStringLiteral()) {
+      return "codeStringLiteral";
+    }
+    if (this.isNumberLiteral()) {
+      return "codeNumberLiteral";
     }
     if (this.isError()) {
       return "codeError";
@@ -120,7 +127,15 @@ export class SourceCode {
   }
 
   markStringLiteral(instIndex, start, end) {
-    this.markSpan(instIndex, start, end, 'LiteralString');
+    this.markSpan(instIndex, start, end, 'StringLiteral');
+  }
+
+  markIntLiteral(instIndex, start, end) {
+    this.markSpan(instIndex, start, end, 'NumberLiteralInt');
+  }
+
+  markFloatLiteral(instIndex, start, end) {
+    this.markSpan(instIndex, start, end, 'NumberLiteralFloat');
   }
 
   markError(instIndex, start, end) {
