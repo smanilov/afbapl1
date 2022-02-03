@@ -72,7 +72,7 @@ class Annotation {
     if (this.isArithmetic()) {
       return "codeArithmetic";
     }
-    
+
     throw "Internal error: unsupported annotation label [" + this.label + "]";
   }
 
@@ -106,6 +106,14 @@ export class SourceCode {
     this.markCategory(instIndex, 'край', 'KeywordEnd');
   }
 
+  markLabel(instIndex, label) {
+    this.markCategory(instIndex, label, 'KeywordLabel');
+  }
+
+  markGoto(instIndex) {
+    this.markCategory(instIndex, 'иди на', 'OperatorGoto');
+  }
+
   markOutput(instIndex) {
     this.markCategory(instIndex, 'изход', 'OperatorOutput');
   }
@@ -122,7 +130,7 @@ export class SourceCode {
     this.markCategory(instIndex, 'иначе', 'OperatorElse');
   }
 
-  
+
   markDeclaration(instIndex) {
     this.markCategory(instIndex, 'нека', 'OperatorLet');
   }
@@ -154,7 +162,7 @@ export class SourceCode {
   markCategory(instIndex, needle, annotationLabel) {
     const spanStart = this.instructions[instIndex].indexOf(needle);
     const spanEnd = spanStart + needle.length;
-    
+
     this.markSpan(instIndex, spanStart, spanEnd, annotationLabel);
   }
 
@@ -169,12 +177,22 @@ export class SourceCode {
     const annotation = new Annotation(annotationLabel, annotationStart, annotationEnd);
 
     // Assuming annotations don't overlap for now.
+    var doAnnotate = true;
+
     var i = 0;
     for (i = 0; i < this.annotations.length; ++i) {
+      if (this.annotations[i].start == annotation.start &&
+        this.annotations[i].end == annotation.end) {
+        doAnnotate = false;
+        break;
+      }
       if (this.annotations[i].start > annotationStart) break;
     }
-    this.annotations.splice(i, 0, annotation);
-    
-    this.setSource(this);
+
+    if (doAnnotate) {
+      this.annotations.splice(i, 0, annotation);
+
+      this.setSource(this);
+    }
   }
 }

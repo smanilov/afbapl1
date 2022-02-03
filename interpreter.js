@@ -44,6 +44,7 @@ class Afbpl1Interpreter {
   constructor(source/*: SourceCode*/) {
     this.source = source;
     this.symbolTable = {};
+    this.labelTable = {};
     this.typeOf = {};
     this.conditionalStack = [];
   }
@@ -60,6 +61,7 @@ class Afbpl1Interpreter {
     if (unitOffsetOrError.isError) {
       return unitOffsetOrError;
     }
+    this.baseIndent = unitOffsetOrError.baseIndent;
     this.unitOffset = unitOffsetOrError.unitOffset;
   }
 
@@ -143,9 +145,22 @@ class Afbpl1Interpreter {
         }
         const conditional = conditionalOrError;
         this.conditionalStack.push(conditional);
+        continue;
       }
       if (this.isDeclaration(inst)) {
         const maybeError = this.performDeclaration(inst);
+        if (maybeError && maybeError.isError) {
+          const error = maybeError;
+          return error;
+        }
+        continue;
+      }
+      if (this.isLabelDeclaration(inst)) {
+        this.performLabelDeclaration(inst);
+        continue;
+      }
+      if (this.isGotoLabel(inst)) {
+        const maybeError = this.performGotoLabel(inst);
         if (maybeError && maybeError.isError) {
           const error = maybeError;
           return error;
@@ -185,6 +200,14 @@ class Afbpl1Interpreter {
 
   isDeclaration(instruction) {
     return instruction.trim().startsWith('нека');
+  }
+
+  isLabelDeclaration(instruction) {
+    return this.computeIndent(instruction) == this.baseIndent;
+  }
+
+  isGotoLabel(instruction) {
+    return instruction.trim().startsWith('иди на');
   }
 
   performOutput(instruction) {
@@ -549,6 +572,35 @@ class Afbpl1Interpreter {
     this.typeOf[variableName] = typeToAssign;
   }
 
+  performLabelDeclaration(instruction) {
+    const labelName = instruction.trim();
+    this.labelTable[labelName] = this.currentLine;
+    this.source.markLabel(this.currentLine, labelName);
+  }
+
+  performGotoLabel(instruction) {
+    this.source.markGoto(this.currentLine);
+
+    const indent = this.computeIndent(instruction);
+    const kwLength = "иди на".length;
+    const argumentStart = indent + kwLength + 1;
+    const argument = instruction.substring(argumentStart);
+
+    if (!argument in this.labelTable) {
+      return {
+        isError: true,
+        message: "Неизвестен още етикет [" + argument + "]."
+      };
+    }
+
+    this.source.markLabel(
+      this.currentLine,
+      argument
+    );
+
+    this.currentLine = this.labelTable[argument];
+  }
+
   // Whether a variable of the given name has been given value already.
   hasVariable(variableName) {
     return variableName in this.symbolTable;
@@ -620,6 +672,7 @@ class Afbpl1Interpreter {
       (baseIndent == nextIndent && this.isEnd(nextInst))) {
       return {
         isError: false,
+        baseIndent: baseIndent,
         unitOffset: nextIndent - baseIndent
       };
     }
