@@ -144,6 +144,14 @@ class Afbpl1Interpreter {
         const conditional = conditionalOrError;
         this.conditionalStack.push(conditional);
       }
+      if (this.isDeclaration(inst)) {
+        const maybeError = this.performDeclaration(inst);
+        if (maybeError && maybeError.isError) {
+          const error = maybeError;
+          return error;
+        }
+        continue;
+      }
     }
   }
 
@@ -173,6 +181,10 @@ class Afbpl1Interpreter {
 
   isElse(instruction) {
     return instruction.trim().startsWith('иначе');
+  }
+
+  isDeclaration(instruction) {
+    return instruction.trim().startsWith('нека');
   }
 
   performOutput(instruction) {
@@ -439,6 +451,102 @@ class Afbpl1Interpreter {
 
     this.source.markStringLiteral(this.currentLine, literal.start, literal.end);
     return this.symbolTable[operand] == parseString(literal.text);
+  }
+
+  performDeclaration(instruction) {
+    this.source.markDeclaration(this.currentLine);
+    const trimmedInstruction = instruction.trim();
+
+    var valueToAssign = null;
+    var typeToAssign = null;
+    var operand = null;
+    for (const [key, value] of Object.entries(this.symbolTable)) {
+      if (trimmedInstruction.endsWith(key)) {
+        operand = key;
+        valueToAssign = value;
+        typeToAssign = this.typeOf[key];
+        this.source.markVariable(
+          this.currentLine,
+          instruction.length - key.length,
+          instruction.length
+        );
+        break;
+      }
+    }
+
+    if (valueToAssign == null) {
+      const stringEnds = Array.from(instruction.matchAll("\""));
+      const operandIsStringLiteral =
+        stringEnds.length >= 2 &&
+        instruction.substring(lastOf(stringEnds).index + 1).trim() === '';
+
+      if (operandIsStringLiteral) {
+        operand = instruction.substring(
+          stringEnds[stringEnds.length - 2].index,
+          stringEnds[stringEnds.length - 1].index + 1
+        );
+        valueToAssign = operand.substring(1, operand.length - 1);
+        typeToAssign = 'текст';
+        this.source.markStringLiteral(
+          this.currentLine,
+          stringEnds[stringEnds.length - 2].index,
+          stringEnds[stringEnds.length - 1].index + 1
+        );
+      }
+    }
+
+    if (valueToAssign == null) {
+      operand = lastOf(trimmedInstruction.split(' '));
+      if (isInt(operand)) {
+        valueToAssign = parseInt(operand);
+        typeToAssign = 'целочислен';
+        const start = instruction.lastIndexOf(operand);
+        this.source.markIntLiteral(this.currentLine, start, start + operand.length);
+      } else if (isFloat(operand)) {
+        valueToAssign = parseFloat(operand);
+        typeToAssign = 'дробно число';
+        const start = instruction.lastIndexOf(operand);
+        this.source.markFloatLiteral(this.currentLine, start, start + operand.length);
+      }
+    }
+
+    const keyword = "нека";
+    if (valueToAssign == null) {
+      const errorStart = instruction.indexOf(keyword) + keyword.length + 1;
+      const errorEnd = instruction.length;
+      this.source.markError(this.currentLine, errorStart, errorEnd);
+      return {
+        isError: true,
+        message: "Декларацията на променлива трябва да завършва с име на " +
+          "вече известна променлива, число, или текст в двойни кавички."
+      };
+    }
+
+    const instructionWithoutOperand = instruction.substring(0, instruction.lastIndexOf(operand));
+    const operator = lastOf(instructionWithoutOperand.trim().split(' '));
+
+    if (operator != 'е' && operator != '=') {
+      const errorStart = instructionWithoutOperand.lastIndexOf(operator);
+      const errorEnd = errorStart + operator.length;
+      this.source.markError(this.currentLine, errorStart, errorEnd);
+
+      return {
+        isError: true,
+        message: "Операторът в декларацията трябва да е 'е' или '=', а не [" +
+          operator + "]."
+      };
+    }
+
+    const operatorStart = instructionWithoutOperand.lastIndexOf(operator);
+    this.source.markArithmetic(this.currentLine, operatorStart, operatorStart + operator.length);
+
+    const variableStart = instruction.indexOf(keyword) + keyword.length + 1;
+
+    const variableName = instruction.substring(variableStart, operatorStart - 1).trim();
+    this.source.markVariable(this.currentLine, variableStart, operatorStart - 1);
+
+    this.symbolTable[variableName] = valueToAssign;
+    this.typeOf[variableName] = typeToAssign;
   }
 
   // Whether a variable of the given name has been given value already.

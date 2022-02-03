@@ -122,6 +122,11 @@ export class SourceCode {
     this.markCategory(instIndex, 'иначе', 'OperatorElse');
   }
 
+  
+  markDeclaration(instIndex) {
+    this.markCategory(instIndex, 'нека', 'OperatorLet');
+  }
+
   markArithmetic(instIndex, start, end) {
     this.markSpan(instIndex, start, end, 'Arithmetic');
   }
